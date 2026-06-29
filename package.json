@@ -1,0 +1,25 @@
+{
+  "name": "debt-tracker",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "db:up": "docker compose up -d",
+    "db:down": "docker compose down",
+    "db:logs": "docker compose logs -f db",
+    "db:reset": "docker compose down -v && docker compose up -d",
+    "backend:install": "pip install -r backend/requirements.txt",
+    "backend:migrate": "cd backend && python -m alembic upgrade head",
+    "backend:dev": "cd backend && python -m uvicorn app.main:app --reload --port 8000",
+    "backend:dev:lan": "cd backend && python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000",
+    "frontend:install": "npm install --prefix frontend",
+    "frontend:dev": "npm run dev --prefix frontend",
+    "frontend:dev:lan": "npm run dev --prefix frontend -- --hostname 0.0.0.0",
+    "frontend:build": "npm run build --prefix frontend",
+    "setup": "node scripts/setup.mjs",
+    "dev": "node scripts/dev.mjs",
+    "start": "npm run dev"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}
