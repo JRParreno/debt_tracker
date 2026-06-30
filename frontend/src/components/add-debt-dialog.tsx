@@ -44,6 +44,17 @@ function todayInputValue(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+function toMonthValue(dateStr: string): string {
+  return dateStr ? dateStr.slice(0, 7) : "";
+}
+
+function monthToStartDate(monthValue: string): string {
+  return monthValue ? `${monthValue}-01` : "";
+}
+
+const fieldClass = "h-10";
+const formGrid = "grid grid-cols-2 gap-3";
+
 function addMonths(year: number, month: number, offset: number) {
   const d = new Date(year, month - 1 + offset, 1);
   return { year: d.getFullYear(), month: d.getMonth() + 1 };
@@ -250,22 +261,54 @@ function AddDebtForm({
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
+      <div className="flex-1 space-y-3 overflow-y-auto px-4 py-3 sm:px-0 sm:py-0">
       {!isCreditCard && (
-      <div className="space-y-2">
-        <Label htmlFor="debt-name">Name</Label>
-        <Input
-          id="debt-name"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="e.g. Atome, Car loan"
-          className="h-11"
-        />
+      <div className={formGrid}>
+        <div className="col-span-2 space-y-1.5 sm:col-span-1">
+          <Label htmlFor="debt-name">Name</Label>
+          <Input
+            id="debt-name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="e.g. Atome, Car loan"
+            className={fieldClass}
+          />
+        </div>
+        <div className="col-span-2 space-y-1.5 sm:col-span-1">
+          <Label htmlFor="debt-type">Type</Label>
+          <Select
+            value={type}
+            onValueChange={(v) => {
+              const next = v as DebtType;
+              setType(next);
+              if (next === "bnpl" || next === "loan") setSchedule("fixed");
+              if (next === "credit_card") {
+                setSchedule("recurring");
+                setSelectedCardId("");
+              }
+            }}
+          >
+            <SelectTrigger id="debt-type" className={`${fieldClass} w-full`}>
+              <SelectValue placeholder="Select type">
+                {DEBT_TYPE_LABELS[type]}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              {Object.entries(DEBT_TYPE_LABELS).map(([value, label]) => (
+                <SelectItem key={value} value={value}>
+                  {label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
       )}
 
-      <div className="space-y-2">
-        <Label>Type</Label>
+      {isCreditCard && (
+      <div className="space-y-1.5">
+        <Label htmlFor="debt-type-cc">Type</Label>
         <Select
           value={type}
           onValueChange={(v) => {
@@ -278,7 +321,7 @@ function AddDebtForm({
             }
           }}
         >
-          <SelectTrigger className="h-11 w-full">
+          <SelectTrigger id="debt-type-cc" className={`${fieldClass} w-full`}>
             <SelectValue placeholder="Select type">
               {DEBT_TYPE_LABELS[type]}
             </SelectValue>
@@ -292,23 +335,23 @@ function AddDebtForm({
           </SelectContent>
         </Select>
       </div>
+      )}
 
       {isCreditCard ? (
-        <div className="space-y-4 rounded-lg border bg-muted/20 p-4">
-          <p className="text-sm text-muted-foreground">
-            Pick a card from My Cards — limit and balance sync automatically.
+        <div className="space-y-3 rounded-lg border bg-muted/20 p-3">
+          <p className="text-xs text-muted-foreground">
+            Pick a card from My Cards — balance syncs automatically.
           </p>
 
           {cardsLoading ? (
             <p className="text-sm text-muted-foreground">Loading cards...</p>
           ) : creditCards.length === 0 ? (
-            <div className="rounded-lg border border-dashed p-4 text-center text-sm text-muted-foreground">
-              No credit cards yet. Add one in the <strong>My cards</strong> section
-              first, then come back here.
+            <div className="rounded-lg border border-dashed p-3 text-center text-xs text-muted-foreground">
+              No credit cards yet. Add one in <strong>My cards</strong> first.
             </div>
           ) : (
             <>
-              <div className="space-y-2">
+              <div className="space-y-1.5">
                 <Label>Credit card</Label>
                 <Select
                   value={selectedCardId}
@@ -317,7 +360,7 @@ function AddDebtForm({
                     if (card) applyCard(card);
                   }}
                 >
-                  <SelectTrigger className="h-11 w-full">
+                  <SelectTrigger className={`${fieldClass} w-full`}>
                     <SelectValue placeholder="Select a card">
                       {selectedCard?.nickname}
                     </SelectValue>
@@ -340,20 +383,20 @@ function AddDebtForm({
               </div>
 
               {selectedCard && (
-                <div className="space-y-2 rounded-lg border bg-background/50 p-3 text-sm">
+                <div className={`${formGrid} rounded-lg border bg-background/50 p-2.5 text-xs`}>
                   <div className="flex justify-between gap-2">
                     <span className="text-muted-foreground">Used</span>
                     <span className="font-medium">
                       {formatCurrency(selectedCard.balance)}
                     </span>
                   </div>
-                  {selectedCard.credit_limit != null && (
+                  {selectedCard.credit_limit != null ? (
                     <>
                       <div className="flex justify-between gap-2">
                         <span className="text-muted-foreground">Limit</span>
                         <span>{formatCurrency(selectedCard.credit_limit)}</span>
                       </div>
-                      <div className="flex justify-between gap-2 text-emerald-400">
+                      <div className="col-span-2 flex justify-between gap-2 text-emerald-400">
                         <span>Available</span>
                         <span className="font-medium">
                           {formatCurrency(
@@ -362,13 +405,15 @@ function AddDebtForm({
                         </span>
                       </div>
                     </>
+                  ) : (
+                    <div />
                   )}
                 </div>
               )}
 
               {selectedCard && selectedCard.minimum_due == null && (
-                <div className="space-y-2">
-                  <Label htmlFor="cc-min-due">Minimum amount due (₱)</Label>
+                <div className="space-y-1.5">
+                  <Label htmlFor="cc-min-due">Minimum due (₱)</Label>
                   <Input
                     id="cc-min-due"
                     type="number"
@@ -377,63 +422,58 @@ function AddDebtForm({
                     value={minimumDue}
                     onChange={(e) => setMinimumDue(e.target.value)}
                     placeholder="500"
-                    className="h-11"
+                    className={fieldClass}
                   />
                 </div>
               )}
 
               {selectedCard && (
-                <div className="space-y-2">
-                  <Label htmlFor="debt-due-day-cc">Due day (1–28)</Label>
-                  <Input
-                    id="debt-due-day-cc"
-                    type="number"
-                    min="1"
-                    max="28"
-                    value={dueDay}
-                    onChange={(e) => setDueDay(e.target.value)}
-                    className="h-11"
-                  />
+                <div className={formGrid}>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="debt-due-day-cc">Due day</Label>
+                    <Input
+                      id="debt-due-day-cc"
+                      type="number"
+                      min="1"
+                      max="28"
+                      value={dueDay}
+                      onChange={(e) => setDueDay(e.target.value)}
+                      className={fieldClass}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="cc-paid-month">Paid this month</Label>
+                    <Input
+                      id="cc-paid-month"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={paidThisMonth}
+                      onChange={(e) => setPaidThisMonth(e.target.value)}
+                      placeholder="Optional"
+                      className={fieldClass}
+                    />
+                  </div>
                 </div>
               )}
 
-              {selectedCard && (
-                <div className="space-y-2">
-                  <Label htmlFor="cc-paid-month">Paid this month (₱)</Label>
-                  <Input
-                    id="cc-paid-month"
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={paidThisMonth}
-                    onChange={(e) => setPaidThisMonth(e.target.value)}
-                    placeholder="e.g. 500 — leave empty if not paid yet"
-                    className="h-11"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Optional. Enter min, partial, or full payment already made
-                    this month — it will be marked paid and the card balance
-                    updates.
+              {selectedCard &&
+                !isNaN(parseFloat(paidThisMonth)) &&
+                parseFloat(paidThisMonth) > 0 &&
+                selectedCard.minimum_due != null &&
+                parseFloat(paidThisMonth) < selectedCard.minimum_due - 0.001 && (
+                  <p className="text-xs text-amber-400">
+                    Partial — below min due of{" "}
+                    {formatCurrency(selectedCard.minimum_due)}
                   </p>
-                  {!isNaN(parseFloat(paidThisMonth)) &&
-                    parseFloat(paidThisMonth) > 0 &&
-                    selectedCard.minimum_due != null &&
-                    parseFloat(paidThisMonth) <
-                      selectedCard.minimum_due - 0.001 && (
-                      <p className="text-xs text-amber-400">
-                        Partial payment — below minimum due of{" "}
-                        {formatCurrency(selectedCard.minimum_due)}
-                      </p>
-                    )}
-                </div>
-              )}
+                )}
             </>
           )}
         </div>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="space-y-2">
-            <Label htmlFor="debt-amount">Amount per month (₱)</Label>
+        <div className={formGrid}>
+          <div className="space-y-1.5">
+            <Label htmlFor="debt-amount">Monthly (₱)</Label>
             <Input
               id="debt-amount"
               type="number"
@@ -442,11 +482,11 @@ function AddDebtForm({
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
               placeholder="5000"
-              className="h-11"
+              className={fieldClass}
             />
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="debt-due-day">Due day (1–28)</Label>
+          <div className="space-y-1.5">
+            <Label htmlFor="debt-due-day">Due day</Label>
             <Input
               id="debt-due-day"
               type="number"
@@ -454,7 +494,7 @@ function AddDebtForm({
               max="28"
               value={dueDay}
               onChange={(e) => setDueDay(e.target.value)}
-              className="h-11"
+              className={fieldClass}
             />
           </div>
         </div>
@@ -465,29 +505,28 @@ function AddDebtForm({
         value={schedule}
         onValueChange={(v) => setSchedule(v as ScheduleType)}
       >
-        <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="fixed">Fixed term</TabsTrigger>
-          <TabsTrigger value="recurring">Recurring</TabsTrigger>
+        <TabsList className="grid h-9 w-full grid-cols-2">
+          <TabsTrigger value="fixed" className="text-xs sm:text-sm">Fixed term</TabsTrigger>
+          <TabsTrigger value="recurring" className="text-xs sm:text-sm">Recurring</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="fixed" className="mt-4 space-y-4">
-          <p className="text-sm text-muted-foreground">
-            For BNPL, loans, or any debt with a set number of payments. Past
-            months are created automatically.
+        <TabsContent value="fixed" className="mt-3 space-y-3">
+          <p className="text-xs text-muted-foreground">
+            Set number of payments — past months backfill automatically.
           </p>
-          <div className="space-y-2">
-            <Label htmlFor="debt-start-date">Start date (first payment month)</Label>
+          <div className="space-y-1.5">
+            <Label htmlFor="debt-start-month">First payment month</Label>
             <Input
-              id="debt-start-date"
-              type="date"
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-              className="h-11"
+              id="debt-start-month"
+              type="month"
+              value={toMonthValue(startDate)}
+              onChange={(e) => setStartDate(monthToStartDate(e.target.value))}
+              className={fieldClass}
             />
           </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="total-installments">Total installments (max 360)</Label>
+          <div className={formGrid}>
+            <div className="space-y-1.5">
+              <Label htmlFor="total-installments">Installments</Label>
               <Input
                 id="total-installments"
                 type="number"
@@ -496,10 +535,10 @@ function AddDebtForm({
                 value={totalInstallments}
                 onChange={(e) => setTotalInstallments(e.target.value)}
                 placeholder="3"
-                className="h-11"
+                className={fieldClass}
               />
             </div>
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               <Label htmlFor="installments-paid">Already paid</Label>
               <Input
                 id="installments-paid"
@@ -507,92 +546,89 @@ function AddDebtForm({
                 min="0"
                 value={installmentsPaid}
                 onChange={(e) => setInstallmentsPaid(e.target.value)}
-                placeholder="2"
-                className="h-11"
+                placeholder="0"
+                className={fieldClass}
               />
             </div>
           </div>
           {installmentPreview && (
-            <div className="rounded-lg border bg-muted/30 p-3 text-sm">
-              <p>
-                <span className="text-muted-foreground">Schedule:</span>{" "}
-                {installmentPreview.from} → {installmentPreview.to} (
-                {installmentPreview.total} payments)
-              </p>
-              <p className="mt-1">
-                <span className="text-emerald-400">
-                  {installmentPreview.paid} paid
-                </span>
-                {" · "}
-                <span className="text-amber-400">
-                  {installmentPreview.remaining} remaining
-                </span>
-              </p>
+            <div className="rounded-lg border bg-muted/30 px-3 py-2 text-xs">
+              <span className="text-muted-foreground">Schedule:</span>{" "}
+              {installmentPreview.from} → {installmentPreview.to} (
+              {installmentPreview.total}) ·{" "}
+              <span className="text-emerald-400">{installmentPreview.paid} paid</span>
+              {" · "}
+              <span className="text-amber-400">{installmentPreview.remaining} left</span>
             </div>
           )}
         </TabsContent>
 
-        <TabsContent value="recurring" className="mt-4 space-y-4">
-          <p className="text-sm text-muted-foreground">
-            Repeats every month until you remove it or set an end date.
+        <TabsContent value="recurring" className="mt-3 space-y-3">
+          <p className="text-xs text-muted-foreground">
+            Repeats monthly until removed or an end month is set.
           </p>
-          <div className="space-y-2">
-            <Label htmlFor="recurring-start">Start date (optional)</Label>
-            <Input
-              id="recurring-start"
-              type="date"
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-              className="h-11"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="debt-end-date">End date (optional)</Label>
-            <Input
-              id="debt-end-date"
-              type="date"
-              value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
-              className="h-11"
-            />
+          <div className={formGrid}>
+            <div className="space-y-1.5">
+              <Label htmlFor="recurring-start">Start month</Label>
+              <Input
+                id="recurring-start"
+                type="month"
+                value={toMonthValue(startDate)}
+                onChange={(e) => setStartDate(monthToStartDate(e.target.value))}
+                className={fieldClass}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="debt-end-month">End month</Label>
+              <Input
+                id="debt-end-month"
+                type="month"
+                value={toMonthValue(endDate)}
+                onChange={(e) => setEndDate(monthToStartDate(e.target.value))}
+                className={fieldClass}
+              />
+            </div>
           </div>
         </TabsContent>
       </Tabs>
       )}
 
       {isCreditCard && (
-        <div className="space-y-2">
-          <Label htmlFor="recurring-start-cc">Start date (optional)</Label>
+        <div className="space-y-1.5">
+          <Label htmlFor="recurring-start-cc">Start month (optional)</Label>
           <Input
             id="recurring-start-cc"
-            type="date"
-            value={startDate}
-            onChange={(e) => setStartDate(e.target.value)}
-            className="h-11"
+            type="month"
+            value={toMonthValue(startDate)}
+            onChange={(e) => setStartDate(monthToStartDate(e.target.value))}
+            className={fieldClass}
           />
         </div>
       )}
 
-      <div className="space-y-2">
+      <div className="space-y-1.5">
         <Label htmlFor="debt-notes">Notes (optional)</Label>
         <Input
           id="debt-notes"
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
-          className="h-11"
+          className={fieldClass}
         />
       </div>
+      </div>
 
-      <Button
-        type="submit"
-        className="h-11 w-full"
-        disabled={
-          submitting ||
-          (isCreditCard && (creditCards.length === 0 || !selectedCardId))
-        }
-      >
-        {submitting ? "Saving..." : "Add debt"}
-      </Button>
+      <div className="shrink-0 border-t bg-background px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-0 sm:pt-3">
+        <Button
+          type="submit"
+          className="h-11 w-full"
+          disabled={
+            submitting ||
+            (isCreditCard && (creditCards.length === 0 || !selectedCardId))
+          }
+        >
+          {submitting ? "Saving..." : "Add debt"}
+        </Button>
+      </div>
     </form>
   );
 }
@@ -607,11 +643,14 @@ export function AddDebtDialog({
   if (isMobile) {
     return (
       <Sheet open={open} onOpenChange={onOpenChange}>
-        <SheetContent side="bottom" className="max-h-[92vh] overflow-y-auto">
-          <SheetHeader>
+        <SheetContent
+          side="bottom"
+          className="flex max-h-[min(92dvh,100%)] flex-col gap-0 overflow-hidden rounded-t-xl p-0"
+        >
+          <SheetHeader className="shrink-0 border-b px-4 py-3 pr-12">
             <SheetTitle>Add debt</SheetTitle>
           </SheetHeader>
-          <div className="mt-4 pb-6">
+          <div className="flex min-h-0 flex-1 flex-col">
             <AddDebtForm
               open={open}
               onSuccess={onSuccess}
@@ -625,15 +664,17 @@ export function AddDebtDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
-        <DialogHeader>
+      <DialogContent className="flex max-h-[min(90dvh,100%)] flex-col gap-0 overflow-hidden p-0 sm:max-w-lg">
+        <DialogHeader className="shrink-0 border-b px-4 py-3 pr-12">
           <DialogTitle>Add debt</DialogTitle>
         </DialogHeader>
-        <AddDebtForm
-          open={open}
-          onSuccess={onSuccess}
-          onClose={() => onOpenChange(false)}
-        />
+        <div className="flex min-h-0 flex-1 flex-col px-4">
+          <AddDebtForm
+            open={open}
+            onSuccess={onSuccess}
+            onClose={() => onOpenChange(false)}
+          />
+        </div>
       </DialogContent>
     </Dialog>
   );
