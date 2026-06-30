@@ -58,6 +58,9 @@ try {
 }
 
 const env = { ...process.env };
+env.CORS_ORIGINS =
+  "http://localhost:3000,http://127.0.0.1:3000";
+
 const backendScript = lanMode ? "backend:dev:lan" : "backend:dev";
 const frontendScript = lanMode ? "frontend:dev:lan" : "frontend:dev";
 
@@ -69,7 +72,7 @@ console.log("    API: http://localhost:8000/docs");
 if (lanMode) {
   const lanIp = process.env.LAN_IP || LAN_IP || getLanIp();
   if (lanIp) {
-    env.CORS_ORIGINS = `http://localhost:3000,http://${lanIp}:3000`;
+    env.CORS_ORIGINS += `,http://${lanIp}:3000`;
     env.NEXT_PUBLIC_API_URL = `http://${lanIp}:8000`;
     console.log("\n  On your phone/tablet (same Wi‑Fi):");
     console.log(`    App: http://${lanIp}:3000`);

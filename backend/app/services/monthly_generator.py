@@ -2,6 +2,8 @@ import calendar
 from datetime import date, datetime
 
 from dateutil.relativedelta import relativedelta
+from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models.debt import Debt, DebtOccurrence, DebtType
@@ -55,6 +57,35 @@ def occurrence_amounts_for_debt(debt: Debt) -> tuple[float | None, float | None,
     return balance, min_due, min_due
 
 
+def insert_occurrence_if_missing(
+    db: Session,
+    *,
+    debt_id: int,
+    year: int,
+    month: int,
+    due_date: date,
+    amount: float,
+    scheduled_amount: float,
+    statement_balance: float | None,
+    minimum_due: float | None,
+    is_paid: bool = False,
+    paid_at: datetime | None = None,
+) -> None:
+    stmt = insert(DebtOccurrence).values(
+        debt_id=debt_id,
+        year=year,
+        month=month,
+        due_date=due_date,
+        amount=amount,
+        scheduled_amount=scheduled_amount,
+        statement_balance=statement_balance,
+        minimum_due=minimum_due,
+        is_paid=is_paid,
+        paid_at=paid_at,
+    ).on_conflict_do_nothing(constraint="uq_debt_year_month")
+    db.execute(stmt)
+
+
 class MonthlyGenerator:
     def __init__(self, db: Session):
         self.db = db
@@ -76,7 +107,8 @@ class MonthlyGenerator:
             if existing:
                 continue
             stmt_bal, min_due, pay_amount = occurrence_amounts_for_debt(debt)
-            occurrence = DebtOccurrence(
+            insert_occurrence_if_missing(
+                self.db,
                 debt_id=debt.id,
                 year=year,
                 month=month,
@@ -85,9 +117,7 @@ class MonthlyGenerator:
                 scheduled_amount=pay_amount,
                 statement_balance=stmt_bal,
                 minimum_due=min_due,
-                is_paid=False,
             )
-            self.db.add(occurrence)
         self.db.commit()
 
     def ensure_occurrences_for_range(
@@ -141,22 +171,24 @@ class MonthlyGenerator:
                 continue
 
             stmt_bal, min_due, pay_amount = occurrence_amounts_for_debt(debt)
-            self.db.add(
-                DebtOccurrence(
-                    debt_id=debt.id,
-                    year=year,
-                    month=month,
-                    due_date=compute_due_date(year, month, debt.due_day),
-                    amount=pay_amount,
-                    scheduled_amount=pay_amount,
-                    statement_balance=stmt_bal,
-                    minimum_due=min_due,
-                    is_paid=mark_paid,
-                    paid_at=datetime.utcnow() if mark_paid else None,
-                )
+            insert_occurrence_if_missing(
+                self.db,
+                debt_id=debt.id,
+                year=year,
+                month=month,
+                due_date=compute_due_date(year, month, debt.due_day),
+                amount=pay_amount,
+                scheduled_amount=pay_amount,
+                statement_balance=stmt_bal,
+                minimum_due=min_due,
+                is_paid=mark_paid,
+                paid_at=datetime.utcnow() if mark_paid else None,
             )
 
-        self.db.commit()
+        try:
+            self.db.commit()
+        except IntegrityError:
+            self.db.rollback()
 
     def resync_debt_schedule(self, debt: Debt) -> None:
         """After editing a debt: drop invalid months, fix due dates, fill gaps."""
@@ -196,18 +228,19 @@ class MonthlyGenerator:
             if existing:
                 continue
             stmt_bal, min_due, pay_amount = occurrence_amounts_for_debt(debt)
-            self.db.add(
-                DebtOccurrence(
-                    debt_id=debt.id,
-                    year=year,
-                    month=month,
-                    due_date=compute_due_date(year, month, debt.due_day),
-                    amount=pay_amount,
-                    scheduled_amount=pay_amount,
-                    statement_balance=stmt_bal,
-                    minimum_due=min_due,
-                    is_paid=False,
-                )
+            insert_occurrence_if_missing(
+                self.db,
+                debt_id=debt.id,
+                year=year,
+                month=month,
+                due_date=compute_due_date(year, month, debt.due_day),
+                amount=pay_amount,
+                scheduled_amount=pay_amount,
+                statement_balance=stmt_bal,
+                minimum_due=min_due,
             )
 
-        self.db.commit()
+        try:
+            self.db.commit()
+        except IntegrityError:
+            self.db.rollback()
